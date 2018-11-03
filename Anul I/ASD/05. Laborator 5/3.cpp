@@ -35,15 +35,17 @@ void read(Node* &head, Node* &tail) {
 	head = tail = NULL;
 	
 	if (n < 0) {
-		cout << "Numarul de elemente al listei trebuie sa fie > 0\n";
+		cout << "Numarul de elemente al listei trebuie sa fie >= 0\n";
 		exit(EXIT_SUCCESS);
 	}
 
-	cout << "Dati elementele listei: ";
-	for (int i = 0; i < n; ++i) {
-		int temp;
-		cin >> temp;
-		addTail(head, tail, temp);
+	if (n > 0) {
+		cout << "Dati elementele listei: ";
+		for (int i = 0; i < n; ++i) {
+			int temp;
+			cin >> temp;
+			addTail(head, tail, temp);
+		}
 	}
 }
 
@@ -94,7 +96,7 @@ void printList(Node* head, Node* tail) {
 			cout << it->info << " ";
 	}
 	else
-		cout << "\nLista este vida!\n";
+		cout << "Lista este vida!";
 	cout << "\n";
 }
 
