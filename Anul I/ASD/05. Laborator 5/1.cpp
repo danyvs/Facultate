@@ -33,12 +33,13 @@ void read(Node* &head, Node* &tail) {
 
 	head = tail = NULL; // initializare lista
 
-	if (n <= 0) {
+	if (n < 0) {
 		cout << "Numarul de elemente al listei trebuie sa fie >= 0\n";
 		exit(EXIT_SUCCESS);
 	}
 
-	cout << "Dati elementele listei: ";
+	if (n > 0)
+		cout << "Dati elementele listei: ";
 	for (int i = 0; i < n; ++i) {
 		double temp;
 		cin >> temp;
@@ -48,21 +49,26 @@ void read(Node* &head, Node* &tail) {
 
 /* Adaugarea mediei aritmetice intre oricare doua noduri consecutive */
 void addBetweenNodes(Node* head, Node* tail) {
-	for (Node* p = head; p->next; p = p->next->next) {
-		Node* temp = new Node;
-		temp->info = (p->info + p->next->info) / 2;
-		/* se face mai intai legatura cu nodul urmator, pentru a nu pierde
-		legaturile dintre noduri */
-		temp->next = p->next; // legatura cu nodul urmator
-		p->next = temp; // legatura cu nodul anterior
-	}
+	if (head)
+		for (Node* it = head; it->next; it = it->next->next) {
+			Node* temp = new Node;
+			temp->info = (it->info + it->next->info) / 2;
+			/* se face mai intai legatura cu nodul urmator, pentru a nu pierde
+			legaturile dintre noduri */
+			temp->next = it->next; // legatura cu nodul urmator
+			it->next = temp; // legatura cu nodul anterior
+		}
 }
 
 /* Afisarea listei */
 void printList(Node* head, Node* tail) {
-	cout << "Lista este: ";
-	for (Node* p = head; p; p = p->next)
-		cout << p->info << " ";
+	if (head) {
+		cout << "Lista este: ";
+		for (Node* it = head; it; it = it->next)
+			cout << it->info << " ";
+	}
+	else
+		cout << "Lista este vida!";
 	cout << "\n";
 }
 
