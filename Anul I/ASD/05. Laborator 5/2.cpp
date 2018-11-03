@@ -41,6 +41,7 @@ Node* positionToInsert(Node* head, Node* tail, int data) {
 
 /* Afisarea listei */
 void printList(Node* head, Node* tail) {
+	cout << "Lista este: ";
 	for (Node* it = head; it; it = it->next)
 		cout << it->info << " ";
 	cout << "\n";
@@ -55,44 +56,48 @@ void createSortedList(Node* &head, Node* &tail) {
 	// initializarea listei
 	head = tail = NULL; 
 
-	if (n <= 0) {
+	if (n < 0) {
 		cout << "Numarul de elemente al listei trebuie sa fie >= 0\n";
 		exit(EXIT_SUCCESS);
 	}
 
-	cout << "Dati elementele listei: ";
+	if (n > 0) {
+		cout << "Dati elementele listei: ";
 
-	/* primul nod se trateaza separat, deoarece nu poate fi comparat cu
-	niciun alt nod */
-	int data;
-	cin >> data;
-	head = tail = new Node;
-	head->info = data;
-	head->next = NULL;
-	printList(head, tail);
-
-	for (int i = 1; i < n; ++i) {
+		/* primul nod se trateaza separat, deoarece nu poate fi comparat cu
+		niciun alt nod */
+		int data;
 		cin >> data;
-		if (data <= head->info) {
-			// valoarea curenta este mai mica (sau egala) decat cea din primul nod al listei
-			addHead(head, tail, data);
-		}
-		else {
-			if (data > tail->info) {
-				// informatia curenta este mai mare decat cea din primul nod al listei
-				addTail(head, tail, data);
+		head = tail = new Node;
+		head->info = data;
+		head->next = NULL;
+		printList(head, tail);
+
+		for (int i = 1; i < n; ++i) {
+			cin >> data;
+			if (data <= head->info) {
+				// valoarea curenta este mai mica (sau egala) decat cea din primul nod al listei
+				addHead(head, tail, data);
 			}
 			else {
-				// informatia curenta trebuie inserata intre doua noduri deja existente
-				Node* pos = positionToInsert(head, tail, data);
-				Node* temp = new Node;
-				temp->info = data;
-				temp->next = pos->next;
-				pos->next = temp;
+				if (data > tail->info) {
+					// informatia curenta este mai mare decat cea din primul nod al listei
+					addTail(head, tail, data);
+				}
+				else {
+					// informatia curenta trebuie inserata intre doua noduri deja existente
+					Node* pos = positionToInsert(head, tail, data);
+					Node* temp = new Node;
+					temp->info = data;
+					temp->next = pos->next;
+					pos->next = temp;
+				}
 			}
+			printList(head, tail);
 		}
-		printList(head, tail);
 	}
+	else
+		cout << "Lista este vida!\n";
 }
 
 int main() {
