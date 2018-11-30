@@ -79,6 +79,8 @@ void printQueue(QueueNode* front, QueueNode* tail) {
 
 int main() {
 	QueueNode *front = NULL, *tail = NULL;
+
+	/* INPUT
 	printQueue(front, tail);
 	pushQueue(front, tail, 1);
 	pushQueue(front, tail, 2);
@@ -96,5 +98,7 @@ int main() {
 	printQueue(front, tail);
 	cout << popQueue(front, tail) << "\n";
 	cout << isQueueEmpty(front, tail) << "\n";
+	*/
+
 	return 0;
 }
