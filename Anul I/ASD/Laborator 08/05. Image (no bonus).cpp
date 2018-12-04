@@ -17,11 +17,6 @@ void readMatrix(int matrix[][NMAX], int& dim) {
 			cin >> matrix[i][j];
 }
 
-void borderMatrix(int matrix[][NMAX], int dim) {
-	for (int i = 0; i < dim; ++i)
-		matrix[i][0] = matrix[0][i] = matrix[i][dim + 1] = matrix[dim + 1][i] = 0;
-}
-
 void pushQueue(QueueNode* &front, QueueNode* &tail, int data) {
 	QueueNode *node = new QueueNode;
 	node->info = data;
@@ -69,7 +64,7 @@ void colorPixels(int matrix[][NMAX], int dim, int linie, int coloana, int color)
 		for (int i = 0; i < 4; ++i) {
 			int linVec = linCur + dx[i];
 			int colVec = colCur + dy[i];
-			if (matrix[linVec][colVec] == 1) {
+			if (linVec >= 0 && linVec < dim && colVec >= 0 && colVec < dim && matrix[linVec][colVec] == 1) {
 				pushQueue(frontLin, tailLin, linVec);
 				pushQueue(frontCol, tailCol, colVec);
 				matrix[linVec][colVec] = color;
