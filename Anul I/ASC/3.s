@@ -73,7 +73,7 @@
 		add $t0, $t0, $t0	# t0 = y + y
 		
 		lw $fp, 0($fp)		# restaureaza $fp
-		sw $t0, 0($sp)		# stiva: $sp:(y + y)
+		sw $t0, 0($sp)		# pune y + y in stiva
 		
 		jr $ra
 		
@@ -86,7 +86,7 @@
 		mul $t0, $t0, $t0	# $t0 = $t0 * $t0
 		
 		lw $fp, 0($fp)		# restaureaza $fp
-		sw $t0, 0($sp)		# stiva: $sp:(y * y)
+		sw $t0, 0($sp)		# pune y * y in stiva
 		
 		jr $ra
 		
@@ -99,6 +99,6 @@
 		sub $t0, $zero, $t0	# $t0 = -$t0
 		
 		lw $fp, 0($fp)		# restaureaza $fp
-		sw $t0, 0($sp)		# stiva: $sp:(-y)
+		sw $t0, 0($sp)		# pune -y in stiva
 		
 		jr $ra	
