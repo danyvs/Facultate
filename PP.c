@@ -5,17 +5,17 @@ struct RGB {
     unsigned char B, G, R;
 };
 
-struct Imagine {
+struct Image {
     unsigned char* header;
-    struct RGB* continut;
-    unsigned int latime, inaltime;
+    struct RGB* content;
+    unsigned int width, height;
+    unsigned int padding;
 };
 
 void xorshift32(unsigned int n, unsigned int** randomNumbers, unsigned int seed) {
     unsigned int r, i;
-    r = seed;
     *randomNumbers = (unsigned int*)malloc((n + 1) * sizeof(unsigned int));
-    (*randomNumbers)[0] = seed;
+    (*randomNumbers)[0] = r = seed;
     for (i = 1; i <= n; ++i) {
         r ^= r << 13;
         r ^= r >> 17;
@@ -27,33 +27,43 @@ void xorshift32(unsigned int n, unsigned int** randomNumbers, unsigned int seed)
 /* Incarca imaginea in memorie in forma liniarizata
  *
  */
-void incarcareImagineInMemorie(char *caleImagineSursa, struct Imagine* imagine) {
-    FILE* fin = fopen(caleImagineSursa, "rb");
+void loadImageIntoMemory(char *imagePath, struct Image* image) {
+    FILE* fin = fopen(imagePath, "rb");
     if (fin == NULL) {
         printf("Imaginea nu a fost deschisa corect!\n");
         return;
     }
 
     // incarcare header
-    imagine->header = (unsigned char*)malloc(54 * sizeof(unsigned char));
-    fread(imagine->header, sizeof(unsigned char), 54, fin);
+    image->header = (unsigned char*)malloc(54 * sizeof(unsigned char));
+    fread(image->header, sizeof(unsigned char), 54, fin);
 
     // obtinere latime imagine
     fseek(fin, 18, SEEK_SET);
-    fread(&imagine->latime, sizeof(unsigned int), 1, fin);
+    fread(&image->width, sizeof(unsigned int), 1, fin);
 
     // obtinere inaltime imagine
-    fread(&imagine->inaltime, sizeof(unsigned int), 1, fin);
+    fread(&image->height, sizeof(unsigned int), 1, fin);
+
+    // calculare padding
+    if (image->width % 4)
+        image->padding = 4 - (3 * image->width) % 4;
+    else
+        image->padding = 0;
 
     fseek(fin, 54, SEEK_SET);
-    imagine->continut = (struct RGB*)malloc(imagine->latime * imagine->inaltime * sizeof(struct RGB));
+    image->content = (struct RGB*)malloc(image->width * image->height * sizeof(struct RGB));
+
+
     int i, j;
-    for (i = imagine->inaltime - 1; i >= 0; --i)
-        for (j = 0; j < imagine->latime; ++j) {
+    for (i = image->height - 1; i >= 0; --i) {
+        for (j = 0; j < image->width; ++j) {
             struct RGB pixel;
             fread(&pixel, sizeof(unsigned char), 3, fin);
-            imagine->continut[i * imagine->latime + j] = pixel;
+            image->content[i * image->width + j] = pixel;
         }
+        fseek(fin, image->padding, SEEK_CUR);
+    }
 
     fclose(fin);
 }
@@ -61,21 +71,23 @@ void incarcareImagineInMemorie(char *caleImagineSursa, struct Imagine* imagine) 
 /*
  *
  */
-void incarcareImagineInFisier(char* numeFisierDestinatie, struct Imagine imagine) {
+void incarcareImagineInFisier(char* numeFisierDestinatie, struct Image image) {
     FILE* fout = fopen(numeFisierDestinatie, "wb");
 
-    fwrite(imagine.header, sizeof(unsigned char), 54, fout);
+    fwrite(image.header, sizeof(unsigned char), 54, fout);
 
     int i;
-    for (i = imagine.inaltime - 1; i >= 0; --i)
-        fwrite(&imagine.continut[i * imagine.latime], sizeof(struct RGB), imagine.latime, fout);
+    for (i = image.height - 1; i >= 0; --i) {
+        fwrite(&image.content[i * image.width], sizeof(struct RGB), image.width, fout);
+
+        unsigned char x = 0;
+        fwrite(&x, sizeof(unsigned char), image.padding, fout);
+    }
 
     fclose(fout);
 }
 
-/*
- *
- */
+
 void durstenfeld(unsigned int** shuffleArray, unsigned int* randomNumbers, unsigned int n) {
     unsigned int i;
 
@@ -84,31 +96,25 @@ void durstenfeld(unsigned int** shuffleArray, unsigned int* randomNumbers, unsig
         (*shuffleArray)[i] = i;
 
     for (i = n - 1; i >= 1; --i) {
-        unsigned int randNr = randomNumbers[i] % n;
+        unsigned int randNr = randomNumbers[i] % (i + 1);
         unsigned int temp = (*shuffleArray)[randNr];
         (*shuffleArray)[randNr] = (*shuffleArray)[i];
         (*shuffleArray)[i] = temp;
     }
 }
 
-/*
- *
- */
-void shufflePixels(struct Imagine imagine, unsigned int* shuffleArray) {
-    struct RGB* tempImage = (struct RGB*)malloc(imagine.inaltime * imagine.latime * sizeof(struct RGB));
+void shufflePixels(struct Image image, unsigned int* shuffleArray) {
+    struct RGB* tempImage = (struct RGB*)malloc(image.height * image.width * sizeof(struct RGB));
 
     unsigned int i;
-    for (i = 0; i < imagine.inaltime * imagine.latime; ++i)
-        tempImage[shuffleArray[i]] = imagine.continut[i];
+    for (i = 0; i < image.height * image.width; ++i)
+        tempImage[i] = image.content[shuffleArray[shuffleArray[i]]];
 
-    for (i = 0; i < imagine.inaltime * imagine.latime; ++i)
-        imagine.continut[i] = tempImage[i];
+    for (i = 0; i < image.height * image.width; ++i)
+        image.content[i] = tempImage[i];
 }
 
-/*
- *
- */
-void criptareImagine(struct Imagine imagine) {
+void encryptImage(struct Image image) {
     // deschid fisierul din care citesc r0 si sv
     FILE* fin = fopen("secret_key.txt", "r");
     if (!fin) {
@@ -119,33 +125,70 @@ void criptareImagine(struct Imagine imagine) {
     unsigned int randomNumber0, startingValue;
     fscanf(fin, "%d%d", &randomNumber0, &startingValue);
 
+    fclose(fin);
+
     unsigned int* randomNumbers;
-    xorshift32(2 * imagine.inaltime * imagine.latime - 1, &randomNumbers, randomNumber0);
+    xorshift32(2 * image.height * image.width - 1, &randomNumbers, randomNumber0);
 
     unsigned int* shuffleArray;
-    durstenfeld(&shuffleArray, randomNumbers, imagine.inaltime * imagine.latime);
+    durstenfeld(&shuffleArray, randomNumbers, image.height * image.width);
 
-    shufflePixels(imagine, shuffleArray);
-
-    imagine.continut[0].B ^= ((startingValue >> (8 * 2)) & 0xFF) ^ ((randomNumbers[imagine.inaltime * imagine.latime] >> (8 * 2)) & 0xFF);
-    imagine.continut[0].G ^= ((startingValue >> (8 * 1)) & 0xFF) ^ ((randomNumbers[imagine.inaltime * imagine.latime] >> (8 * 1)) & 0xFF);
-    imagine.continut[0].R ^= ((startingValue >> (8 * 0)) & 0xFF) ^ ((randomNumbers[imagine.inaltime * imagine.latime] >> (8 * 0)) & 0xFF);
+    shufflePixels(image, shuffleArray);
+/*
+    image.content[0].R ^= ((startingValue >> (8 * 2)) & 0xFF) ^ ((randomNumbers[image.height * image.width] >> (8 * 2)) & 0xFF);
+    image.content[0].G ^= ((startingValue >> (8 * 1)) & 0xFF) ^ ((randomNumbers[image.height * image.width] >> (8 * 1)) & 0xFF);
+    image.content[0].B ^= ((startingValue >> (8 * 0)) & 0xFF) ^ ((randomNumbers[image.height * image.width] >> (8 * 0)) & 0xFF);
 
     unsigned int i;
-    for (i = 1; i <= imagine.inaltime * imagine.latime - 1; ++i) {
-        imagine.continut[i].B ^= imagine.continut[i - 1].B ^ ((randomNumbers[imagine.inaltime * imagine.latime + i] >> (8 * 2)) & 0xFF);
-        imagine.continut[i].G ^= imagine.continut[i - 1].G ^ ((randomNumbers[imagine.inaltime * imagine.latime + i] >> (8 * 1)) & 0xFF);
-        imagine.continut[i].R ^= imagine.continut[i - 1].R ^ ((randomNumbers[imagine.inaltime * imagine.latime + i] >> (8 * 0)) & 0xFF);
+    for (i = 1; i <= image.height* image.width - 1; ++i) {
+        image.content[i].R ^= image.content[i - 1].R ^ ((randomNumbers[image.height * image.width + i] >> (8 * 2)) & 0xFF);
+        image.content[i].G ^= image.content[i - 1].G ^ ((randomNumbers[image.height * image.width + i] >> (8 * 1)) & 0xFF);
+        image.content[i].B ^= image.content[i - 1].B ^ ((randomNumbers[image.height * image.width + i] >> (8 * 0)) & 0xFF);
+    }
+*/
+}
+
+void printChiSquareTest(char* imagePath) {
+    struct Image image;
+    loadImageIntoMemory(imagePath, &image);
+
+    double fbar = image.height * image.width / 256.0;
+
+    double chiR = 0, chiG = 0, chiB = 0;
+    unsigned int i, j, intensity;
+    for (intensity = 0; intensity < 256; ++intensity) {
+        double sumR = 0, sumG = 0, sumB = 0;
+        for (i = 0; i < image.height; ++i)
+            for (j = 0; j < image.width; ++j) {
+                double fR = image.content[i * image.width + j].R;
+                double fG = image.content[i * image.width + j].G;
+                double fB = image.content[i * image.width + j].B;
+
+                if (fR == intensity) ++sumR;
+                if (fG == intensity) ++sumG;
+                if (fB == intensity) ++sumB;
+            }
+        chiR += (sumR - fbar) * (sumR - fbar) / fbar;
+        chiG += (sumG - fbar) * (sumG - fbar) / fbar;
+        chiB += (sumB - fbar) * (sumB - fbar) / fbar;
     }
 
-    fclose(fin);
+    printf("R: %0.2lf\n", chiR);
+    printf("G: %0.2lf\n", chiG);
+    printf("B: %0.2lf\n", chiB);
+
+    // dezalocare
+    free(image.header);
+    free(image.content);
 }
 
 int main() {
-    struct Imagine imagine;
-    incarcareImagineInMemorie("peppers.bmp", &imagine);
-    criptareImagine(imagine);
-    incarcareImagineInFisier("imagine.bmp", imagine);
+    struct Image image;
+    loadImageIntoMemory("imagine_5x5.bmp", &image);
+    encryptImage(image);
+    incarcareImagineInFisier("imagine.bmp", image);
+
+    // printChiSquareTest("peppers.bmp");
 
     return 0;
 }
