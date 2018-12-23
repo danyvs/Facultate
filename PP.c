@@ -71,8 +71,8 @@ void loadImageIntoMemory(char *imagePath, struct Image* image) {
 /*
  *
  */
-void incarcareImagineInFisier(char* numeFisierDestinatie, struct Image image) {
-    FILE* fout = fopen(numeFisierDestinatie, "wb");
+void loadImageIntoFile(char* filePath, struct Image image) {
+    FILE* fout = fopen(filePath, "wb");
 
     fwrite(image.header, sizeof(unsigned char), 54, fout);
 
@@ -96,7 +96,7 @@ void durstenfeld(unsigned int** shuffleArray, unsigned int* randomNumbers, unsig
         (*shuffleArray)[i] = i;
 
     for (i = n - 1; i >= 1; --i) {
-        unsigned int randNr = randomNumbers[i] % (i + 1);
+        unsigned int randNr = randomNumbers[n - i] % (i + 1);
         unsigned int temp = (*shuffleArray)[randNr];
         (*shuffleArray)[randNr] = (*shuffleArray)[i];
         (*shuffleArray)[i] = temp;
@@ -108,7 +108,7 @@ void shufflePixels(struct Image image, unsigned int* shuffleArray) {
 
     unsigned int i;
     for (i = 0; i < image.height * image.width; ++i)
-        tempImage[i] = image.content[shuffleArray[shuffleArray[i]]];
+        tempImage[shuffleArray[i]] = image.content[i];
 
     for (i = 0; i < image.height * image.width; ++i)
         image.content[i] = tempImage[i];
@@ -123,7 +123,7 @@ void encryptImage(struct Image image) {
     }
 
     unsigned int randomNumber0, startingValue;
-    fscanf(fin, "%d%d", &randomNumber0, &startingValue);
+    fscanf(fin, "%u%u", &randomNumber0, &startingValue);
 
     fclose(fin);
 
@@ -134,7 +134,7 @@ void encryptImage(struct Image image) {
     durstenfeld(&shuffleArray, randomNumbers, image.height * image.width);
 
     shufflePixels(image, shuffleArray);
-/*
+
     image.content[0].R ^= ((startingValue >> (8 * 2)) & 0xFF) ^ ((randomNumbers[image.height * image.width] >> (8 * 2)) & 0xFF);
     image.content[0].G ^= ((startingValue >> (8 * 1)) & 0xFF) ^ ((randomNumbers[image.height * image.width] >> (8 * 1)) & 0xFF);
     image.content[0].B ^= ((startingValue >> (8 * 0)) & 0xFF) ^ ((randomNumbers[image.height * image.width] >> (8 * 0)) & 0xFF);
@@ -145,7 +145,7 @@ void encryptImage(struct Image image) {
         image.content[i].G ^= image.content[i - 1].G ^ ((randomNumbers[image.height * image.width + i] >> (8 * 1)) & 0xFF);
         image.content[i].B ^= image.content[i - 1].B ^ ((randomNumbers[image.height * image.width + i] >> (8 * 0)) & 0xFF);
     }
-*/
+
 }
 
 void printChiSquareTest(char* imagePath) {
@@ -184,9 +184,9 @@ void printChiSquareTest(char* imagePath) {
 
 int main() {
     struct Image image;
-    loadImageIntoMemory("imagine_5x5.bmp", &image);
+    loadImageIntoMemory("peppers.bmp", &image);
     encryptImage(image);
-    incarcareImagineInFisier("imagine.bmp", image);
+    loadImageIntoFile("imagine.bmp", image);
 
     // printChiSquareTest("peppers.bmp");
 
