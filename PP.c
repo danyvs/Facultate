@@ -146,6 +146,56 @@ void encryptImage(struct Image image) {
         image.content[i].B ^= image.content[i - 1].B ^ ((randomNumbers[image.height * image.width + i] >> (8 * 0)) & 0xFF);
     }
 
+    free(randomNumbers);
+    free(shuffleArray);
+
+}
+
+unsigned int* inversePermutation(unsigned int* shuffleArray, unsigned int n) {
+    unsigned int* tempShuffleArray = (unsigned int*)malloc(n * sizeof(unsigned int));
+    unsigned int i;
+    for (i = 0; i < n; ++i)
+        tempShuffleArray[shuffleArray[i]] = i;
+    return tempShuffleArray;
+}
+
+void decryptImage(struct Image image) {
+    // deschid fisierul din care citesc r0 si sv
+    FILE* fin = fopen("secret_key.txt", "r");
+    if (!fin) {
+        printf("Fisierul nu a fost deschis corect!\n");
+        return;
+    }
+
+    unsigned int randomNumber0, startingValue;
+    fscanf(fin, "%u%u", &randomNumber0, &startingValue);
+
+    fclose(fin);
+
+    unsigned int* randomNumbers;
+    xorshift32(2 * image.height * image.width - 1, &randomNumbers, randomNumber0);
+
+    unsigned int* shuffleArray;
+    durstenfeld(&shuffleArray, randomNumbers, image.height * image.width);
+
+    // CALCULARE INVERSA
+    shuffleArray = inversePermutation(shuffleArray, image.height * image.width);
+
+    unsigned int i;
+    for (i = image.height* image.width - 1; i; --i) {
+        image.content[i].R ^= image.content[i - 1].R ^ ((randomNumbers[image.height * image.width + i] >> (8 * 2)) & 0xFF);
+        image.content[i].G ^= image.content[i - 1].G ^ ((randomNumbers[image.height * image.width + i] >> (8 * 1)) & 0xFF);
+        image.content[i].B ^= image.content[i - 1].B ^ ((randomNumbers[image.height * image.width + i] >> (8 * 0)) & 0xFF);
+    }
+
+    image.content[0].R ^= ((startingValue >> (8 * 2)) & 0xFF) ^ ((randomNumbers[image.height * image.width] >> (8 * 2)) & 0xFF);
+    image.content[0].G ^= ((startingValue >> (8 * 1)) & 0xFF) ^ ((randomNumbers[image.height * image.width] >> (8 * 1)) & 0xFF);
+    image.content[0].B ^= ((startingValue >> (8 * 0)) & 0xFF) ^ ((randomNumbers[image.height * image.width] >> (8 * 0)) & 0xFF);
+
+    shufflePixels(image, shuffleArray);
+
+    free(randomNumbers);
+    free(shuffleArray);
 }
 
 void printChiSquareTest(char* imagePath) {
@@ -184,8 +234,8 @@ void printChiSquareTest(char* imagePath) {
 
 int main() {
     struct Image image;
-    loadImageIntoMemory("peppers.bmp", &image);
-    encryptImage(image);
+    loadImageIntoMemory("enc_peppers_ok.bmp", &image);
+    decryptImage(image);
     loadImageIntoFile("imagine.bmp", image);
 
     // printChiSquareTest("peppers.bmp");
