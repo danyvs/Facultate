@@ -192,17 +192,17 @@ void templateMatching(struct Image image, struct Image template, double threshol
         }
 }
 
-void drawBorderWindow(struct Image image, struct Window window, struct Pixel color) {
+void drawBorderWindow(struct Image image, struct Window window) {
     unsigned int i;
     // vertical
     for (i = 0; i < window.height; ++i) {
-        image.content[(i + window.startLine) * image.width + window.startColumn] = color;
-        image.content[(i + window.startLine) * image.width + (window.startColumn + window.width - 1)] = color;
+        image.content[(i + window.startLine) * image.width + window.startColumn] = window.color;
+        image.content[(i + window.startLine) * image.width + (window.startColumn + window.width - 1)] = window.color;
     }
     // horizontal
     for (i = 0; i < window.width; ++i) {
-        image.content[window.startLine * image.width + window.startColumn + i] = color;
-        image.content[(window.startLine + window.height - 1) * image.width + window.startColumn + i] = color;
+        image.content[window.startLine * image.width + window.startColumn + i] = window.color;
+        image.content[(window.startLine + window.height - 1) * image.width + window.startColumn + i] = window.color;
     }
 }
 
@@ -293,13 +293,17 @@ unsigned int max(unsigned int a, unsigned int b) {
 }
 
 double intersection(struct Window a, struct Window b) {
-    unsigned int x1 = max(a.startLine, b.startLine);
-    unsigned int y1 = max(a.startColumn, b.startColumn);
-    unsigned int x2 = min(a.startLine + a.height, b.startLine + b.height);
-    unsigned int y2 = min(a.startColumn + a.width, b.startColumn + b.width);
+    int x1 = max(a.startLine, b.startLine);
+    int y1 = max(a.startColumn, b.startColumn);
+    int x2 = min(a.startLine + a.height, b.startLine + b.height);
+    int y2 = min(a.startColumn + a.width, b.startColumn + b.width);
 
-    double res = (x2 - x1) * (y2 - y1);
-    res /= (a.height * a.width + b.height * b.width - res);
+    double res = 0;
+    if (a.startLine <= x1 && x1 <= a.startLine + a.height && a.startColumn <= y1 && y1 <= a.startColumn + a.width)
+        if (a.startLine <= x2 && x2 <= a.startLine + a.height && a.startColumn <= y2 && y2 <= a.startColumn + a.width) {
+        res = (x2 - x1) * (y2 - y1);
+        res /= (a.height * a.width + b.height * b.width - res);
+    }
 
     return res;
 }
@@ -313,10 +317,55 @@ int compareByCorrelation(const void* a, const void* b) {
         return -1;
 }
 
+void nonMaximalElimination(struct Window** allMatches, unsigned int* cntAllMatches) {
+    int* eliminated = (int*)malloc(*cntAllMatches * sizeof(int));
+
+    unsigned int i, j;
+
+    for (i = 0; i < *cntAllMatches; ++i)
+        eliminated[i] = 0;
+
+    for (i = 0; i < *cntAllMatches; ++i)
+        if (!eliminated[i])
+            for (j = i + 1; j < *cntAllMatches; ++j)
+                if (!eliminated[j])
+                    if (intersection((*allMatches)[i], (*allMatches)[j]) > 0.2)
+                        eliminated[j] = 1;
+
+    unsigned int index = 0;
+    for (i = 0; i < (*cntAllMatches); ++i)
+        if (!eliminated[i])
+            (*allMatches)[index++] = (*allMatches)[i];
+    *cntAllMatches = index;
+
+    struct Window* tempAllMatches = (struct Window*)realloc(*allMatches, (*cntAllMatches) * sizeof(struct Window));
+    if (!tempAllMatches) {
+        printf("Nu s-a putut realoca memorie!\n");
+        free(*allMatches);
+        exit(EXIT_FAILURE);
+    }
+    else
+        *allMatches = tempAllMatches;
+}
+
+void drawBorders(struct Window* allMatches, unsigned int cntAllMatches) {
+    struct Image image = loadImageIntoMemory("test.bmp");
+
+    unsigned int i;
+    for (i = 0; i < cntAllMatches; ++i)
+        drawBorderWindow(image, allMatches[i]);
+
+    saveImageIntoFile("imagine.bmp", image);
+}
+
 int main() {
     unsigned int cntAllMatches;
     struct Window* allMatches;
     getAllMatches(&allMatches, &cntAllMatches);
     qsort(allMatches, cntAllMatches, sizeof(struct Window), compareByCorrelation);
+    nonMaximalElimination(&allMatches, &cntAllMatches);
+
+    drawBorders(allMatches, cntAllMatches);
+
     return 0;
 }
