@@ -225,7 +225,7 @@ unsigned int* inversePermutation(unsigned int n, unsigned int* shuffleArray) {
  *  Al doilea parametru al functiei este calea imaginii criptate
  *  Al treilea parametru al functiei este calea unui fisier text care contine cheia secreta
  */
-void decryptImage(char* initFilePath, char* encryptedFilePath, char* keysFilePath) {
+void decryptImage(char* filePath, char* encryptedFilePath, char* keysFilePath) {
     // deschid fisierul din care citesc R0 si SV
     FILE* fin = fopen("secret_key.txt", "r");
     if (!fin) {
@@ -238,7 +238,7 @@ void decryptImage(char* initFilePath, char* encryptedFilePath, char* keysFilePat
 
     fclose(fin);
 
-    encryptImage(initFilePath, encryptedFilePath, keysFilePath);
+    // encryptImage(initFilePath, encryptedFilePath, keysFilePath);
 
     struct Image image = loadImageIntoMemory(encryptedFilePath);
 
@@ -266,7 +266,7 @@ void decryptImage(char* initFilePath, char* encryptedFilePath, char* keysFilePat
     // se permuta pixelii
     shufflePixels(image, shuffleArray);
 
-    saveImageIntoFile(initFilePath, image);
+    saveImageIntoFile(filePath, image);
 
     free(randomNumbers);
     free(shuffleArray);
@@ -314,9 +314,13 @@ void printChiSquareTest(char* imagePath) {
     free(image.content);
 }
 
+/*  Functia grayscaleImage transforma o imagine color in imagine grayscale
+ *  Primul parametru al functiei este calea imaginii sursa
+ *  Al doilea parametru al functiei este calea imaginii modificate (grayscale)
+ */
+void grayscaleImage(char* sourceFilePath, char* destinationFilePath) {
+    struct Image image = loadImageIntoMemory(sourceFilePath);
 
-
-void grayscaleImage(struct Image image) {
     unsigned int i, j;
     for (i = 0; i < image.height; ++i)
         for (j = 0; j < image.width; ++j) {
@@ -324,9 +328,24 @@ void grayscaleImage(struct Image image) {
             unsigned char gray = 0.299 * image.content[idx].R + 0.587 * image.content[idx].G + 0.114 * image.content[i].B;
             image.content[idx].R = image.content[idx].G = image.content[idx].B = gray;
         }
+
+    saveImageIntoFile(destinationFilePath, image);
+
+    free(image.header);
+    free(image.content);
 }
 
+/*  Functia calculateCorrelation calculeaza corelatia, folosind formula data, dintre o imagine si un
+ * sablon, incepand cu linia line si coloana column
+ *  Primul parametru al functiei este structura ce contine imaginea
+ *  Al doilea parametru al functiei este structura ce contine sablonul
+ *  Al treilea parametru al functiei este linia la care se incepe calcularea corelatiei
+ *  Al patrulea parametru al functiei este coloana la care se incepe calcularea corelatiei
+ */
 double calculateCorrelation(struct Image image, struct Image template, unsigned int line, unsigned int column) {
+    // struct Image image = loadImageIntoMemory(imagePath);
+    // struct Image template = loadImageIntoMemory(templatePath);
+
     unsigned int i, j;
 
     // numarul de pixeli
@@ -385,7 +404,20 @@ double calculateCorrelation(struct Image image, struct Image template, unsigned 
     return correlation;
 }
 
-void templateMatching(struct Image image, struct Image template, double threshold, struct Window** matches, unsigned int* cntMatches) {
+/*  Functia templateMatching returneaza prin intermediul parametrilor toate ferestrele sabloanelor
+ * care au un grad de corelatie cu imaginea cel putin egal cu threshold
+ *  Primul parametru al functiei este calea imagineii pe care se face template-matching
+ *  Al doilea parametru al functiei este sablonul cu care se face template-matching
+ *  Al treilea parametru al functiei este pragul pe care trebuie sa il aiba un sablon pentru a fi
+ * considerat detectie corecta
+ *  Al patrulea parametru al functiei este vectorul de ferestre prin intermediul caruia se returneaza
+ * toate ferestrele care au gradul de corelatie cel putin egal cu pragul
+ *  Al cincilea parametru al functiei este numarul de elemente al vectorului de detectii
+ */
+void templateMatching(char* imagePath, char* templatePath, double threshold, struct Window** matches, unsigned int* cntMatches) {
+    struct Image image = loadImageIntoMemory(imagePath);
+    struct Image template = loadImageIntoMemory(templatePath);
+
     *matches = NULL;
     *cntMatches = 0;
 
@@ -411,8 +443,16 @@ void templateMatching(struct Image image, struct Image template, double threshol
                 }
             }
         }
+
+    free(image.header);
+    free(image.content);
+    free(template.header);
+    free(template.content);
 }
 
+/*
+ * 
+ */
 void drawBorderWindow(struct Image image, struct Window window) {
     unsigned int i;
     // vertical
@@ -427,6 +467,9 @@ void drawBorderWindow(struct Image image, struct Window window) {
     }
 }
 
+/*  Functia returneaza
+ *
+ */
 struct Pixel* initColorsForPixels() {
     struct Pixel* colorOfNumbers = (struct Pixel*)malloc(10 * sizeof(struct Pixel));
 
@@ -448,25 +491,24 @@ void getAllMatches(struct Window** allMatches, unsigned int *cntAllMatches) {
     struct Pixel* colorOfNumbers = initColorsForPixels();
 
     char filePath[20];
-    /// printf("Introduceti numele fisierului care contine denumirile imaginilor: ");
-    /// scanf("%s", filePath);
+    printf("Introduceti numele fisierului care contine denumirile imaginilor: ");
+    scanf("%s", filePath);
 
-    FILE* fin = fopen("ftm.txt", "r");
+    FILE* fin = fopen(filePath, "r");
     if (!fin) {
         printf("Fisierul nu a fost deschis corect!\n");
         exit(EXIT_FAILURE);
     }
 
-    // se incarca in memorie imaginea pe care se va face template-matching si se face grayscale
+    // se incarca in memorie imaginea pe care se va face template-matching
     fscanf(fin, "%s", filePath);
-    struct Image image = loadImageIntoMemory(filePath);
-    // saveImageIntoFile("image.bmp", image);
-    grayscaleImage(image);
+    grayscaleImage(filePath, "grayscaleImage.bmp");
+    struct Image image = loadImageIntoMemory("grayscaleImage.bmp");
 
     // se stabileste pragul de detectie
-    double threshold = 0.5;
-    ///  printf("Introduceti pragul de detectie: ");
-    /// scanf("%lf", &threshold);
+    double threshold;
+    printf("Introduceti pragul de detectie: ");
+    scanf("%lf", &threshold);
 
     *allMatches = NULL;
     *cntAllMatches = 0;
@@ -475,13 +517,13 @@ void getAllMatches(struct Window** allMatches, unsigned int *cntAllMatches) {
     for (i = 0; i < 10; ++i) {
         // se incarca in memorie sablonul si se face grayscale
         fscanf(fin, "%s", filePath);
-        struct Image template = loadImageIntoMemory(filePath);
-        grayscaleImage(template);
+        grayscaleImage(filePath, "grayscaleTemplate.bmp");
+        struct Image template = loadImageIntoMemory("grayscaleTemplate.bmp");
 
         // se obtin potrivirile pentru sablonul curent
         unsigned int cntMatches;
         struct Window* matches;
-        templateMatching(image, template, threshold, &matches, &cntMatches);
+        templateMatching("grayscaleImage.bmp", "grayscaleTemplate.bmp", threshold, &matches, &cntMatches);
 
         // se memoreaza culoarea cu care va fi colorata potrivirea
         for (j = 0; j < cntMatches; ++j)
@@ -569,19 +611,19 @@ void nonMaximalElimination(struct Window** allMatches, unsigned int* cntAllMatch
         *allMatches = tempAllMatches;
 }
 
-void drawBorders(struct Window* allMatches, unsigned int cntAllMatches) {
-    struct Image image = loadImageIntoMemory("test.bmp");
+void drawBorders(char* sourcefilePath, char* destinationFilePath, struct Window* allMatches, unsigned int cntAllMatches) {
+    struct Image image = loadImageIntoMemory(sourcefilePath);
 
     unsigned int i;
     for (i = 0; i < cntAllMatches; ++i)
         drawBorderWindow(image, allMatches[i]);
 
-    saveImageIntoFile("imagine.bmp", image);
+    saveImageIntoFile(destinationFilePath, image);
 }
 
 int main() {
-    char imagePath[20], encryptedImagePath[20], secretKeysTextPath[20];
-
+    char imagePath[20], encryptedImagePath[20], secretKeysTextPath[20], finalImagePath[20];
+/*
     printf("Introduceti calea imaginii initiale: ");
     scanf("%s", imagePath);
     printf("Introduceti calea imaginii criptate: ");
@@ -590,20 +632,24 @@ int main() {
     scanf("%s", secretKeysTextPath);
 
     encryptImage(imagePath, encryptedImagePath, secretKeysTextPath);
+    decryptImage(imagePath, encryptedImagePath, secretKeysTextPath);
 
-/*
+    printf("Valorile testului chi-patrat pentru imaginea initiala sunt:\n");
+    printChiSquareTest(imagePath);
+    printf("Valorile testului chi-patrat pentru imaginea criptata sunt:\n");
+    printChiSquareTest(encryptedImagePath);
+*/
     unsigned int cntAllMatches;
     struct Window* allMatches;
+
     getAllMatches(&allMatches, &cntAllMatches);
+/*
     qsort(allMatches, cntAllMatches, sizeof(struct Window), compareByCorrelation);
-
-    printf("%u\n", cntAllMatches);
-
     nonMaximalElimination(&allMatches, &cntAllMatches);
 
-    printf("%u\n", cntAllMatches);
-
-    drawBorders(allMatches, cntAllMatches);
+    printf("Introduceti calea imaginii pe care se vor desena chenarele: ");
+    scanf("%s", finalImagePath);
+    drawBorders(imagePath, finalImagePath, allMatches, cntAllMatches);
 */
     return 0;
 }
