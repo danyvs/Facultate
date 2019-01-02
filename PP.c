@@ -1,5 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <math.h>
+#include <string.h>
 
 struct Pixel {
     unsigned char B, G, R;
@@ -10,6 +12,13 @@ struct Image {
     struct Pixel* content;
     unsigned int width, height;
     unsigned int padding;
+};
+
+struct Window {
+    unsigned int startLine, startColumn;
+    unsigned int height, width;
+    double correlation;
+    struct Pixel color;
 };
 
 /*  Functia xorshift32 genereaza numere intregi fara semn pe 32 de biti, cu un caracter pseudo aleator
@@ -31,7 +40,7 @@ unsigned int* xorshift32(unsigned int n, unsigned int seed) {
 }
 
 /*  Functia incarca o imaginea BMP in memoria interna in forma liniarizata
- *  Parametrul functiei este calea imaginii BMP
+ *  Functia are ca parametru calea imaginii BMP
  *  Functia returneaza o structura Image, care contine informatii despre imagine
  */
 struct Image loadImageIntoMemory(char *imagePath) {
@@ -43,6 +52,7 @@ struct Image loadImageIntoMemory(char *imagePath) {
     }
 
     struct Image image;
+
     // se obtine header-ul
     image.header = (unsigned char*)malloc(54 * sizeof(unsigned char));
     fread(image.header, sizeof(unsigned char), 54, fin);
@@ -80,8 +90,8 @@ struct Image loadImageIntoMemory(char *imagePath) {
 }
 
 /*  Functia salveaza in memoria externa o imagine BMP stocata in forma liniarizata
- *  Primul parametru al functiei este calea fisierului in care va fi salvat imaginea
- *  Al doilea parametru al functia este imaginea in forma liniarizara
+ *  Primul parametru al functiei este calea fisierului in care va fi salvata imaginea
+ *  Al doilea parametru al functiei este structura care contine imaginea in forma liniarizata
  */
 void saveImageIntoFile(char* filePath, struct Image image) {
     // se deschide fisierul in care va fi salvata imaginea
@@ -106,11 +116,11 @@ void saveImageIntoFile(char* filePath, struct Image image) {
 
 /*  Functia genereaza o permutare aleatoare cu ajutorul algoritmului lui Durstenfeld si a numerelor
  * pseudo-aleatoare generate anterior
- *  Primul parametru al functiei este reprezentat de numerele pseduo-aleatoare generate anterior
- *  Al doilea parametru al functiei este numarul de elemente al permutarii
+ *  Primul parametru al functiei este numarul de elemente al permutarii
+ *  Al doilea parametru al functiei este reprezentat de numerele pseduo-aleatoare generate anterior
  *  Functia returneaza un vector care contine permutarea obtinuta in urma aplicarii algoritmului
  */
-unsigned int* durstenfeld(unsigned int* randomNumbers, unsigned int n) {
+unsigned int* durstenfeld(unsigned int n, unsigned int* randomNumbers) {
     unsigned int* shuffleArray = (unsigned int*)malloc(n * sizeof(unsigned int));
     unsigned int i;
 
@@ -147,26 +157,30 @@ void shufflePixels(struct Image image, unsigned int* shuffleArray) {
 }
 
 /*  Functia encryptImage aplica algoritmul de criptare
- *  Parametrul functiei este imaginea ce urmeaza sa fie criptata
+ *  Primul parametru al functiei este calea imaginii intiale
+ *  Al doilea parametru al functiei este calea imaginii criptate
+ *  Al treilea parametru al functiei este calea unui fisier text care contine cheia secreta
  */
-void encryptImage(struct Image image) {
+void encryptImage(char* sourceFilePath, char* destinationFilePath, char* keysFilePath) {
     // deschid fisierul din care citesc R0 si SV
-    FILE* fin = fopen("secret_key.txt", "r");
-    if (!fin) {
+    FILE* finKeys = fopen(keysFilePath, "r");
+    if (!finKeys) {
         printf("Fisierul nu a fost deschis corect!\n");
         return;
     }
 
     unsigned int randomNumber0, startingValue;
-    fscanf(fin, "%u%u", &randomNumber0, &startingValue);
+    fscanf(finKeys, "%u%u", &randomNumber0, &startingValue);
 
-    fclose(fin);
+    fclose(finKeys);
+
+    struct Image image = loadImageIntoMemory(sourceFilePath);
 
     // se genereaza numerele pseudo-aleatoare
     unsigned int* randomNumbers = xorshift32(2 * image.height * image.width - 1, randomNumber0);
 
     // se genereaza permutarea aleatoare
-    unsigned int* shuffleArray = durstenfeld(randomNumbers, image.height * image.width);
+    unsigned int* shuffleArray = durstenfeld(image.height * image.width, randomNumbers);
 
     // se permuta pixelii
     shufflePixels(image, shuffleArray);
@@ -183,17 +197,20 @@ void encryptImage(struct Image image) {
         image.content[i].B ^= image.content[i - 1].B ^ ((randomNumbers[image.height * image.width + i] >> (8 * 0)) & 0xFF);
     }
 
-    // se dezaloca
+    saveImageIntoFile(destinationFilePath, image);
+
     free(randomNumbers);
     free(shuffleArray);
+    free(image.header);
+    free(image.content);
 }
 
 /*  Functia inverse permutation calculeaza inversa unei permutari date
- *  Primul parametru al functiei este un vector ce contine permutarea
- *  Al doilea parametru al functiei este numarul de elemente al permutarii
+ *  Primul parametru al functiei este numarul de elemente al permutarii
+ *  Al doilea parametru al functiei este un vector ce contine permutarea
  *  Functia returneaza un vector ce contine inversa permutarii date
  */
-unsigned int* inversePermutation(unsigned int* shuffleArray, unsigned int n) {
+unsigned int* inversePermutation(unsigned int n, unsigned int* shuffleArray) {
     unsigned int* tempShuffleArray = (unsigned int*)malloc(n * sizeof(unsigned int));
 
     unsigned int i;
@@ -204,9 +221,11 @@ unsigned int* inversePermutation(unsigned int* shuffleArray, unsigned int n) {
 }
 
 /*  Functia decryptImage aplica algoritmul de decriptare
- *  Parametrul functiei este imaginea ce urmeaza sa fie decriptata
+ *  Primul parametru al functiei este calea imaginii initiale
+ *  Al doilea parametru al functiei este calea imaginii criptate
+ *  Al treilea parametru al functiei este calea unui fisier text care contine cheia secreta
  */
-void decryptImage(struct Image image) {
+void decryptImage(char* initFilePath, char* encryptedFilePath, char* keysFilePath) {
     // deschid fisierul din care citesc R0 si SV
     FILE* fin = fopen("secret_key.txt", "r");
     if (!fin) {
@@ -219,14 +238,18 @@ void decryptImage(struct Image image) {
 
     fclose(fin);
 
+    encryptImage(initFilePath, encryptedFilePath, keysFilePath);
+
+    struct Image image = loadImageIntoMemory(encryptedFilePath);
+
     // se genereaza numerele pseudo-aleatoare
     unsigned int* randomNumbers = xorshift32(2 * image.height * image.width - 1, randomNumber0);
 
     // se genereaza permutarea aleatoare
-    unsigned int* shuffleArray = durstenfeld(randomNumbers, image.height * image.width);
+    unsigned int* shuffleArray = durstenfeld(image.height * image.width, randomNumbers);
 
     // se calculeaza inversa permutarii aleatoare
-    shuffleArray = inversePermutation(shuffleArray, image.height * image.width);
+    shuffleArray = inversePermutation(image.height * image.width, shuffleArray);
 
     // se aplica algoritmul de decriptare
     unsigned int i;
@@ -243,13 +266,15 @@ void decryptImage(struct Image image) {
     // se permuta pixelii
     shufflePixels(image, shuffleArray);
 
-    // se dezaloca
+    saveImageIntoFile(initFilePath, image);
+
     free(randomNumbers);
     free(shuffleArray);
+    free(image.header);
+    free(image.content);
 }
 
-/*  Functia afiseaza valorile testului chi-patrat pentru o imagine BMP pe fiecare
- * canal de culoare (R, G, B)
+/*  Functia afiseaza valorile testului chi-patrat pentru o imagine BMP pe fiecare canal de culoare (R, G, B)
  *  Functia are ca parametru calea imaginii
  */
 void printChiSquareTest(char* imagePath) {
@@ -285,18 +310,300 @@ void printChiSquareTest(char* imagePath) {
     printf("G: %0.2lf\n", chiG);
     printf("B: %0.2lf\n", chiB);
 
-    // se dezaloca
     free(image.header);
     free(image.content);
 }
 
-int main() {
-    struct Image image;
-    image = loadImageIntoMemory("peppers.bmp");
-    encryptImage(image);
-    decryptImage(image);
-    saveImageIntoFile("imagine.bmp", image);
-    printChiSquareTest("imagine.bmp");
 
+
+void grayscaleImage(struct Image image) {
+    unsigned int i, j;
+    for (i = 0; i < image.height; ++i)
+        for (j = 0; j < image.width; ++j) {
+            unsigned int idx = i * image.width + j;
+            unsigned char gray = 0.299 * image.content[idx].R + 0.587 * image.content[idx].G + 0.114 * image.content[i].B;
+            image.content[idx].R = image.content[idx].G = image.content[idx].B = gray;
+        }
+}
+
+double calculateCorrelation(struct Image image, struct Image template, unsigned int line, unsigned int column) {
+    unsigned int i, j;
+
+    // numarul de pixeli
+    unsigned int cntPixels = template.height * template.width;
+
+    // media valorilor intensitatilor grayscale a pixelilor din fereastra
+    double mediaPixelsIntensityImage = 0;
+    for (i = 0; i < template.height; ++i)
+        for (j = 0; j < template.width; ++j)
+            mediaPixelsIntensityImage += image.content[(i + line) * image.width + (j + column)].R;
+    mediaPixelsIntensityImage /= cntPixels;
+
+    // media valorilor intensitatilor grayscale a pixelilor din sablon
+    double mediaPixelsIntensityTemplate = 0;
+    for (i = 0; i < template.height; ++i)
+        for (j = 0; j < template.width; ++j)
+            mediaPixelsIntensityTemplate += template.content[i * template.width + j].R;
+    mediaPixelsIntensityTemplate /= cntPixels;
+
+    // deviatia standard a valorilor intensitatilor grayscale a pixelilor din fereastra
+    double standardDeviationImage = 0;
+    for (i = 0; i < template.height; ++i)
+        for (j = 0; j < template.width; ++j) {
+            double pixelDeviation = image.content[(i + line) * image.width + (j + column)].R - mediaPixelsIntensityImage;
+            pixelDeviation *= pixelDeviation;
+            standardDeviationImage += pixelDeviation;
+        }
+    standardDeviationImage /= (cntPixels - 1);
+    standardDeviationImage = sqrt(standardDeviationImage);
+
+    // deviatia standard a valorilor intensitatilor grayscale a pixelilor din sablon
+    double standardDeviationTemplate = 0;
+    for (i = 0; i < template.height; ++i)
+        for (j = 0; j < template.width; ++j) {
+            double pixelDeviation = template.content[i * template.width + j].R - mediaPixelsIntensityTemplate;
+            pixelDeviation *= pixelDeviation;
+            standardDeviationTemplate += pixelDeviation;
+        }
+    standardDeviationTemplate /= (cntPixels - 1);
+    standardDeviationTemplate = sqrt(standardDeviationTemplate);
+
+    double correlation = 0;
+    for (i = 0; i < template.height; ++i)
+        for (j = 0; j < template.width; ++j) {
+            unsigned char intensityPixelImage = image.content[(i + line) * image.width + (j + column)].R;
+            unsigned char intensityPixelTemplate = template.content[i * template.width + j].R;
+
+            double currentCorrelation = intensityPixelImage - mediaPixelsIntensityImage;
+            currentCorrelation *= (intensityPixelTemplate - mediaPixelsIntensityTemplate);
+            currentCorrelation /= standardDeviationImage;
+            currentCorrelation /= standardDeviationTemplate;
+            correlation += currentCorrelation;
+        }
+    correlation /= cntPixels;
+
+    return correlation;
+}
+
+void templateMatching(struct Image image, struct Image template, double threshold, struct Window** matches, unsigned int* cntMatches) {
+    *matches = NULL;
+    *cntMatches = 0;
+
+    unsigned int i, j;
+    for (i = 0; i + template.height < image.height; ++i)
+        for (j = 0; j + template.width < image.width; ++j) {
+            double corr = calculateCorrelation(image, template, i, j);
+            if (corr >= threshold) {
+                ++(*cntMatches);
+                struct Window* tempWindows = (struct Window*)realloc((*matches), (*cntMatches) * sizeof(struct Window));
+                if (!tempWindows) {
+                    printf("Nu s-a putut realoca memorie!\n");
+                    free(*matches);
+                    exit(EXIT_FAILURE);
+                }
+                else {
+                    *matches = tempWindows;
+                    (*matches)[*cntMatches - 1].startLine = i;
+                    (*matches)[*cntMatches - 1].startColumn = j;
+                    (*matches)[*cntMatches - 1].height = template.height;
+                    (*matches)[*cntMatches - 1].width = template.width;
+                    (*matches)[*cntMatches - 1].correlation = corr;
+                }
+            }
+        }
+}
+
+void drawBorderWindow(struct Image image, struct Window window) {
+    unsigned int i;
+    // vertical
+    for (i = 0; i < window.height; ++i) {
+        image.content[(i + window.startLine) * image.width + window.startColumn] = window.color;
+        image.content[(i + window.startLine) * image.width + (window.startColumn + window.width - 1)] = window.color;
+    }
+    // horizontal
+    for (i = 0; i < window.width; ++i) {
+        image.content[window.startLine * image.width + window.startColumn + i] = window.color;
+        image.content[(window.startLine + window.height - 1) * image.width + window.startColumn + i] = window.color;
+    }
+}
+
+struct Pixel* initColorsForPixels() {
+    struct Pixel* colorOfNumbers = (struct Pixel*)malloc(10 * sizeof(struct Pixel));
+
+    colorOfNumbers[0].R = 255, colorOfNumbers[0].G =   0, colorOfNumbers[0].B =   0;
+    colorOfNumbers[1].R = 255, colorOfNumbers[1].G = 255, colorOfNumbers[1].B =   0;
+    colorOfNumbers[2].R =   0, colorOfNumbers[2].G = 255, colorOfNumbers[2].B =   0;
+    colorOfNumbers[3].R =   0, colorOfNumbers[3].G = 255, colorOfNumbers[3].B = 255;
+    colorOfNumbers[4].R = 255, colorOfNumbers[4].G =   0, colorOfNumbers[4].B = 255;
+    colorOfNumbers[5].R =   0, colorOfNumbers[5].G =   0, colorOfNumbers[5].B = 255;
+    colorOfNumbers[6].R = 192, colorOfNumbers[6].G = 192, colorOfNumbers[6].B = 192;
+    colorOfNumbers[7].R = 255, colorOfNumbers[7].G = 140, colorOfNumbers[7].B =   0;
+    colorOfNumbers[8].R = 128, colorOfNumbers[8].G =   0, colorOfNumbers[8].B = 128;
+    colorOfNumbers[9].R = 128, colorOfNumbers[9].G =   0, colorOfNumbers[9].B =   0;
+
+    return colorOfNumbers;
+}
+
+void getAllMatches(struct Window** allMatches, unsigned int *cntAllMatches) {
+    struct Pixel* colorOfNumbers = initColorsForPixels();
+
+    char filePath[20];
+    /// printf("Introduceti numele fisierului care contine denumirile imaginilor: ");
+    /// scanf("%s", filePath);
+
+    FILE* fin = fopen("ftm.txt", "r");
+    if (!fin) {
+        printf("Fisierul nu a fost deschis corect!\n");
+        exit(EXIT_FAILURE);
+    }
+
+    // se incarca in memorie imaginea pe care se va face template-matching si se face grayscale
+    fscanf(fin, "%s", filePath);
+    struct Image image = loadImageIntoMemory(filePath);
+    // saveImageIntoFile("image.bmp", image);
+    grayscaleImage(image);
+
+    // se stabileste pragul de detectie
+    double threshold = 0.5;
+    ///  printf("Introduceti pragul de detectie: ");
+    /// scanf("%lf", &threshold);
+
+    *allMatches = NULL;
+    *cntAllMatches = 0;
+
+    unsigned int i, j;
+    for (i = 0; i < 10; ++i) {
+        // se incarca in memorie sablonul si se face grayscale
+        fscanf(fin, "%s", filePath);
+        struct Image template = loadImageIntoMemory(filePath);
+        grayscaleImage(template);
+
+        // se obtin potrivirile pentru sablonul curent
+        unsigned int cntMatches;
+        struct Window* matches;
+        templateMatching(image, template, threshold, &matches, &cntMatches);
+
+        // se memoreaza culoarea cu care va fi colorata potrivirea
+        for (j = 0; j < cntMatches; ++j)
+            matches[j].color = colorOfNumbers[i];
+
+        // se realoca memorie pentru vectorul care contine toate potrivirile
+        *cntAllMatches += cntMatches;
+        struct Window* tempAllMatches = (struct Window*)realloc(*allMatches, (*cntAllMatches) * sizeof(struct Window));
+        if (!tempAllMatches && cntMatches) {
+            printf("Nu s-a putut realoca memorie!\n");
+            free(*allMatches);
+            exit(EXIT_FAILURE);
+        }
+        else {
+            *allMatches = tempAllMatches;
+            for (j = 0; j < cntMatches; ++j)
+                (*allMatches)[*cntAllMatches - cntMatches + j] = matches[j];
+        }
+    }
+
+    fclose(fin);
+}
+
+unsigned int min(unsigned int a, unsigned int b) {
+    return a < b ? a : b;
+}
+
+unsigned int max(unsigned int a, unsigned int b) {
+    return a > b ? a : b;
+}
+
+double intersection(struct Window a, struct Window b) {
+    int x1 = max(a.startLine, b.startLine);
+    int y1 = max(a.startColumn, b.startColumn);
+    int x2 = min(a.startLine + a.height, b.startLine + b.height);
+    int y2 = min(a.startColumn + a.width, b.startColumn + b.width);
+
+    double res = 0;
+    if (a.startLine <= x1 && x1 <= a.startLine + a.height && a.startColumn <= y1 && y1 <= a.startColumn + a.width)
+        if (a.startLine <= x2 && x2 <= a.startLine + a.height && a.startColumn <= y2 && y2 <= a.startColumn + a.width) {
+            res = (x2 - x1) * (y2 - y1);
+            res /= (a.height * a.width + b.height * b.width - res);
+        }
+
+    return res;
+}
+
+int compareByCorrelation(const void* a, const void* b) {
+    struct Window x = *(struct Window*)a;
+    struct Window y = *(struct Window*)b;
+    if (x.correlation < y.correlation)
+        return 1;
+    else
+        return -1;
+}
+
+void nonMaximalElimination(struct Window** allMatches, unsigned int* cntAllMatches) {
+    int* eliminated = (int*)malloc(*cntAllMatches * sizeof(int));
+
+    unsigned int i, j;
+
+    for (i = 0; i < *cntAllMatches; ++i)
+        eliminated[i] = 0;
+
+    for (i = 0; i < *cntAllMatches; ++i)
+        if (!eliminated[i])
+            for (j = i + 1; j < *cntAllMatches; ++j)
+                if (!eliminated[j])
+                    if (intersection((*allMatches)[i], (*allMatches)[j]) > 0.2)
+                        eliminated[j] = 1;
+
+    unsigned int index = 0;
+    for (i = 0; i < (*cntAllMatches); ++i)
+        if (!eliminated[i])
+            (*allMatches)[index++] = (*allMatches)[i];
+    *cntAllMatches = index;
+
+    struct Window* tempAllMatches = (struct Window*)realloc(*allMatches, (*cntAllMatches) * sizeof(struct Window));
+    if (!tempAllMatches) {
+        printf("Nu s-a putut realoca memorie!\n");
+        free(*allMatches);
+        exit(EXIT_FAILURE);
+    }
+    else
+        *allMatches = tempAllMatches;
+}
+
+void drawBorders(struct Window* allMatches, unsigned int cntAllMatches) {
+    struct Image image = loadImageIntoMemory("test.bmp");
+
+    unsigned int i;
+    for (i = 0; i < cntAllMatches; ++i)
+        drawBorderWindow(image, allMatches[i]);
+
+    saveImageIntoFile("imagine.bmp", image);
+}
+
+int main() {
+    char imagePath[20], encryptedImagePath[20], secretKeysTextPath[20];
+
+    printf("Introduceti calea imaginii initiale: ");
+    scanf("%s", imagePath);
+    printf("Introduceti calea imaginii criptate: ");
+    scanf("%s", encryptedImagePath);
+    printf("Introduceti calea fisierului care contine cheia secreta: ");
+    scanf("%s", secretKeysTextPath);
+
+    encryptImage(imagePath, encryptedImagePath, secretKeysTextPath);
+
+/*
+    unsigned int cntAllMatches;
+    struct Window* allMatches;
+    getAllMatches(&allMatches, &cntAllMatches);
+    qsort(allMatches, cntAllMatches, sizeof(struct Window), compareByCorrelation);
+
+    printf("%u\n", cntAllMatches);
+
+    nonMaximalElimination(&allMatches, &cntAllMatches);
+
+    printf("%u\n", cntAllMatches);
+
+    drawBorders(allMatches, cntAllMatches);
+*/
     return 0;
 }
