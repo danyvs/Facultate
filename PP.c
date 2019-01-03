@@ -450,25 +450,26 @@ void templateMatching(char* imagePath, char* templatePath, double threshold, str
     free(template.content);
 }
 
-/*
- * 
+/*  Functia drawBorderWindow deseneaza conturul unei ferestre date cu o culoare data
+ *  Primul parametru al functiei este structura care contine imaginea pe care se va desena
+ *  Al doilea parametru al functiei este structura care memoreaza date despre fereastra
+ *  Al treilea parametru al functiei este culoare cu care se va desena conturul
  */
-void drawBorderWindow(struct Image image, struct Window window) {
+void drawBorderWindow(struct Image image, struct Window window, struct Pixel color) {
     unsigned int i;
     // vertical
     for (i = 0; i < window.height; ++i) {
-        image.content[(i + window.startLine) * image.width + window.startColumn] = window.color;
-        image.content[(i + window.startLine) * image.width + (window.startColumn + window.width - 1)] = window.color;
+        image.content[(i + window.startLine) * image.width + window.startColumn] = color;
+        image.content[(i + window.startLine) * image.width + (window.startColumn + window.width - 1)] = color;
     }
     // horizontal
     for (i = 0; i < window.width; ++i) {
-        image.content[window.startLine * image.width + window.startColumn + i] = window.color;
-        image.content[(window.startLine + window.height - 1) * image.width + window.startColumn + i] = window.color;
+        image.content[window.startLine * image.width + window.startColumn + i] = color;
+        image.content[(window.startLine + window.height - 1) * image.width + window.startColumn + i] = color;
     }
 }
 
-/*  Functia returneaza
- *
+/*  Functia returneaza un vector ce contine culorile cu care vor fi conturate cifrele
  */
 struct Pixel* initColorsForPixels() {
     struct Pixel* colorOfNumbers = (struct Pixel*)malloc(10 * sizeof(struct Pixel));
@@ -487,6 +488,11 @@ struct Pixel* initColorsForPixels() {
     return colorOfNumbers;
 }
 
+/*  Functia getAllMatches returneaza prin intermediul parametrilor toate detectiile care au un
+ * grad de corespondenta cel putin egal cu un prag dat
+ *  Primul parametru al functiei este vectorul care va memora detectiile
+ *  Al doilea parametru al functiei este numarul de elemente al vectorului de detectii
+ */
 void getAllMatches(struct Window** allMatches, unsigned int *cntAllMatches) {
     struct Pixel* colorOfNumbers = initColorsForPixels();
 
@@ -513,8 +519,12 @@ void getAllMatches(struct Window** allMatches, unsigned int *cntAllMatches) {
     *allMatches = NULL;
     *cntAllMatches = 0;
 
+    // se prea numarul de sabloane cu care se va face template-matching
+    unsigned int cntTemplates;
+    fscanf(fin, "%u", &cntTemplates);
+
     unsigned int i, j;
-    for (i = 0; i < 10; ++i) {
+    for (i = 0; i < cntTemplates; ++i) {
         // se incarca in memorie sablonul si se face grayscale
         fscanf(fin, "%s", filePath);
         grayscaleImage(filePath, "grayscaleTemplate.bmp");
@@ -555,9 +565,14 @@ unsigned int max(unsigned int a, unsigned int b) {
     return a > b ? a : b;
 }
 
+/*  Functia intersection calculeaza gradul de intersectie a 2 ferestre
+ *  Parametrii functiei sunt cele 2 ferestre
+ */
 double intersection(struct Window a, struct Window b) {
+    // (x1, y1) - coltul din stanga sus
     int x1 = max(a.startLine, b.startLine);
     int y1 = max(a.startColumn, b.startColumn);
+    // (x2, y2) - coltul din dreapta jos
     int x2 = min(a.startLine + a.height, b.startLine + b.height);
     int y2 = min(a.startColumn + a.width, b.startColumn + b.width);
 
@@ -571,6 +586,10 @@ double intersection(struct Window a, struct Window b) {
     return res;
 }
 
+/*  Functia compareByCorrelation reprezinta criteriul de comparare pentru qsort
+ *  In acest caz, aceasta functie ajuta la sortarea descrescatoare a ferestrelor
+ * dupa corelatie
+ */
 int compareByCorrelation(const void* a, const void* b) {
     struct Window x = *(struct Window*)a;
     struct Window y = *(struct Window*)b;
@@ -580,7 +599,13 @@ int compareByCorrelation(const void* a, const void* b) {
         return -1;
 }
 
+/*  Functia nonMaximalElimination elimina toate detectiile care se suprapun, pastrandu-le doar pe
+ * cele cu gradul de corelatie cel mai mare
+ *  Primul parametru al functiei este vectorul care memoreaza detectiile
+ *  Al doilea parametru al functiei este numarul de detectii
+ */
 void nonMaximalElimination(struct Window** allMatches, unsigned int* cntAllMatches) {
+    // vector care memoreaza daca un element a fost eliminat (1) sau nu (0)
     int* eliminated = (int*)malloc(*cntAllMatches * sizeof(int));
 
     unsigned int i, j;
@@ -595,6 +620,7 @@ void nonMaximalElimination(struct Window** allMatches, unsigned int* cntAllMatch
                     if (intersection((*allMatches)[i], (*allMatches)[j]) > 0.2)
                         eliminated[j] = 1;
 
+    // se pastreaza doar elementele care nu au fost marcate pentru eliminare
     unsigned int index = 0;
     for (i = 0; i < (*cntAllMatches); ++i)
         if (!eliminated[i])
@@ -611,19 +637,25 @@ void nonMaximalElimination(struct Window** allMatches, unsigned int* cntAllMatch
         *allMatches = tempAllMatches;
 }
 
+/*  Functia drawBorders deseneaza contururile ferestrelor
+ *  Primul parametru al functiei este calea imaginii pe care se vor desena contururile
+ *  Al doilea parametru al functiei este calea fisierului unde va fi salvata imaginea
+ *  Al treilea parametru al functiei este vectorul care contine detectiile
+ *  Al patrulea parametru al functiei este numarul de detectii
+ */
 void drawBorders(char* sourcefilePath, char* destinationFilePath, struct Window* allMatches, unsigned int cntAllMatches) {
     struct Image image = loadImageIntoMemory(sourcefilePath);
 
     unsigned int i;
     for (i = 0; i < cntAllMatches; ++i)
-        drawBorderWindow(image, allMatches[i]);
+        drawBorderWindow(image, allMatches[i], allMatches[i].color);
 
     saveImageIntoFile(destinationFilePath, image);
 }
 
 int main() {
     char imagePath[20], encryptedImagePath[20], secretKeysTextPath[20], finalImagePath[20];
-/*
+
     printf("Introduceti calea imaginii initiale: ");
     scanf("%s", imagePath);
     printf("Introduceti calea imaginii criptate: ");
@@ -638,18 +670,18 @@ int main() {
     printChiSquareTest(imagePath);
     printf("Valorile testului chi-patrat pentru imaginea criptata sunt:\n");
     printChiSquareTest(encryptedImagePath);
-*/
+
     unsigned int cntAllMatches;
     struct Window* allMatches;
 
     getAllMatches(&allMatches, &cntAllMatches);
-/*
+
     qsort(allMatches, cntAllMatches, sizeof(struct Window), compareByCorrelation);
     nonMaximalElimination(&allMatches, &cntAllMatches);
 
     printf("Introduceti calea imaginii pe care se vor desena chenarele: ");
     scanf("%s", finalImagePath);
     drawBorders(imagePath, finalImagePath, allMatches, cntAllMatches);
-*/
+
     return 0;
 }
