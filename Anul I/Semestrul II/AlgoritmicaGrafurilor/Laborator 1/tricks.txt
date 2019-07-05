@@ -1,0 +1,2 @@
+1. Muchiile folosite de BFS pentru a descoperi noi vârfuri accesibile din nodul de start formează un arbore cu rădăcină (rădăcina este nodul de start). Pentru a reţine acest arbore putem folosi legături de tip tată (predecesor).
+2. Pentru orice vârf i accesibil din nodul de start lanțul/drumul determinat prin parcurgerea BFS de la nodul de start la i (din arbore) este minim (ca număr de muchii).
